@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>روس تيك | ROS TECH - نظام إدارة الحسابات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                primary: 'var(--brand-primary)',
+                secondary: 'var(--brand-secondary)',
+                bg: 'var(--brand-bg)',
+                accent: 'var(--brand-accent)',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --brand-primary: #16423C;
+        --brand-secondary: #6A9C89;
+        --brand-bg: #E9EFEC;
+        --brand-accent: #C4DAD2;
+      }
+      body { 
+        font-family: 'Tajawal', sans-serif; 
+        background-color: var(--brand-bg);
+      }
+      
+      @media print {
+        @page { 
+          size: A4; 
+          margin: 0; 
+        }
+        
+        /* إخفاء التطبيق بالكامل أثناء الطباعة لمنع تداخل العناصر */
+        #root > div:not(.print-only) {
+          display: none !important;
+        }
+
+        /* إظهار حاوية الطباعة فقط بجودة عالية */
+        .print-only {
+          display: block !important;
+          visibility: visible !important;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+        }
+
+        .no-print {
+          display: none !important;
+        }
+
+        /* تحسين طباعة الألوان والخلفيات */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+      }
+
+      /* الحالة الافتراضية في المتصفح */
+      .print-only { display: none; }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "axios": "https://esm.sh/axios@^1.13.5"
+  }
+}
+</script>
+</head>
+  <body class="bg-brand-bg text-slate-900">
+    <div id="root"></div>
+  </body>
+</html>
