@@ -2,231 +2,197 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { FORMAT_CURRENCY } from '../constants';
+import { partnersApi } from '../services/partners.api';
 import { 
   PieChart, 
   HandCoins, 
-  CheckCircle, 
-  Info, 
   Users,
   History,
+  TrendingUp,
+  Loader2,
   DollarSign,
-  Calculator,
-  ArrowDownCircle,
-  TrendingUp
+  PlusCircle
 } from 'lucide-react';
 
 const ProfitDistribution: React.FC = () => {
-  const { transactions, partners, setPartners, setTransactions, distributionHistory, setDistributionHistory } = useApp();
-  
+  const { partners, refreshData, distributionHistory, dashboardStats } = useApp();
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
-
-  // 1. حساب إجمالي الإيرادات
-  const totalIncome = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-  
-  // 2. حساب مصاريف التشغيل فقط (إيجار، رواتب، إلخ) واستبعاد مبالغ "صرف الأرباح"
-  // هذا يضمن أن توزيع الربح لا يقلل من الربح نفسه في المعادلة
-  const operationalExpenses = transactions
-    .filter(t => t.type === 'EXPENSE' && t.category !== 'صرف أرباح')
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  // 3. صافي الربح الحقيقي للمحل (قبل التوزيع)
-  const netProfit = Math.max(0, totalIncome - operationalExpenses);
+  const [distAmount, setDistAmount] = useState('');
+  const [isDistributing, setIsDistributing] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState<string | null>(null);
 
   const handleInputChange = (partnerId: string, value: string) => {
     setPayAmounts(prev => ({ ...prev, [partnerId]: value }));
   };
 
-  const handlePayPartner = (partnerId: string) => {
-    const amountToPay = parseFloat(payAmounts[partnerId] || '0');
-    const partner = partners.find(p => p.id === partnerId);
+  const handleDistribute = async () => {
+    const amount = parseFloat(distAmount);
+    if (!amount || amount <= 0) return;
+    setIsDistributing(true);
+    try {
+      await partnersApi.distribute(amount);
+      await refreshData();
+      setDistAmount('');
+      alert('تم توزيع الأرباح على محافظ الشركاء بنجاح');
+    } catch (error) {
+      alert('فشل توزيع الأرباح');
+    } finally {
+      setIsDistributing(false);
+    }
+  };
+
+  const handleWithdraw = async (partnerId: string) => {
+    const amount = parseFloat(payAmounts[partnerId] || '0');
+    if (!amount || amount <= 0) return;
     
-    if (!partner) return;
-
-    // نصيب الشريك من الربح الكلي
-    const totalShare = netProfit * (partner.sharePercentage / 100);
-    // المتبقي الفعلي له
-    const currentRemaining = totalShare - partner.paidAmount;
-
-    if (amountToPay <= 0) {
-      alert('يرجى إدخال مبلغ صحيح');
-      return;
+    setIsWithdrawing(partnerId);
+    try {
+      await partnersApi.withdraw(partnerId, amount);
+      await refreshData();
+      setPayAmounts(prev => ({ ...prev, [partnerId]: '' }));
+      alert('تم تسجيل عملية السحب بنجاح');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'فشل السحب');
+    } finally {
+      setIsWithdrawing(null);
     }
-
-    if (amountToPay > currentRemaining + 0.1) {
-      alert(`المبلغ المدخل أكبر من المتبقي للشريك (${FORMAT_CURRENCY(currentRemaining)})`);
-      return;
-    }
-
-    // تحديث ما تم صرفه للشريك في الحالة (State)
-    setPartners(prev => prev.map(p => 
-      p.id === partnerId ? { ...p, paidAmount: p.paidAmount + amountToPay } : p
-    ));
-
-    // تسجيل العملية في الخزنة كـ "صرف أرباح" (يتم استبعادها من حسبة صافي الربح فوق)
-    const expenseTx = {
-      id: `TX-PROF-${Date.now()}`,
-      type: 'EXPENSE' as const,
-      category: 'صرف أرباح',
-      amount: amountToPay,
-      date: new Date().toISOString().split('T')[0],
-      description: `صرف أرباح للشريك: ${partner.name}`,
-    };
-    setTransactions(prev => [expenseTx, ...prev]);
-
-    // تسجيل في سجل التوزيعات
-    const historyRecord = {
-      id: `HIST-${Date.now()}`,
-      partnerName: partner.name,
-      amount: amountToPay,
-      date: new Date().toISOString().split('T')[0],
-    };
-    setDistributionHistory(prev => [historyRecord, ...prev]);
-
-    setPayAmounts(prev => ({ ...prev, [partnerId]: '' }));
-    alert(`تم صرف ${FORMAT_CURRENCY(amountToPay)} بنجاح.`);
   };
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-20" dir="rtl">
-      {/* 1. Dashboard Header */}
+      {/* 1. Header with Distribution Form */}
       <div className="bg-slate-900 rounded-[2.5rem] p-8 lg:p-12 text-white shadow-2xl relative overflow-hidden">
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="p-4 bg-blue-500/20 rounded-3xl text-blue-400 border border-blue-500/20 shadow-inner">
-              <PieChart size={36} />
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-blue-500/20 rounded-3xl text-blue-400 border border-blue-500/20 shadow-inner">
+                <PieChart size={36} />
+              </div>
+              <div>
+                <h1 className="text-3xl font-black">نظام الشركاء والمحافظ</h1>
+                <p className="text-slate-400 font-bold mt-1">توزيع أرباح وسحب مبالغ نقدية</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-black">نظام توزيع الأرباح</h1>
-              <p className="text-slate-400 font-bold mt-1">تثبيت الحصص والتحكم اليدوي في المبالغ المتبقية</p>
+
+            <div className="bg-white/5 p-6 rounded-3xl border border-white/10 w-full lg:w-auto flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <p className="text-[10px] font-black text-slate-500 uppercase mb-2">توزيع أرباح مجمعة</p>
+                <input 
+                  type="number" 
+                  placeholder="المبلغ الإجمالي للتوزيع"
+                  className="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-white outline-none w-full"
+                  value={distAmount}
+                  onChange={(e) => setDistAmount(e.target.value)}
+                />
+              </div>
+              <button 
+                onClick={handleDistribute}
+                disabled={isDistributing || !distAmount}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black px-8 py-2 rounded-xl h-fit self-end flex items-center gap-2"
+              >
+                {isDistributing ? <Loader2 size={18} className="animate-spin" /> : <PlusCircle size={18} />}
+                توزيع الآن
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-12">
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-500 uppercase">أرباح المحل الكلية</span>
-                  <TrendingUp size={16} className="text-green-400" />
-                </div>
-                <p className="text-3xl font-black text-white">{FORMAT_CURRENCY(netProfit)}</p>
-                <p className="text-[10px] text-slate-400 mt-2 font-bold">هذا الرقم ثابت ولا يتأثر بعمليات صرف الأرباح</p>
+                <span className="text-xs font-black text-slate-500 uppercase">إجمالي الربح الصافي</span>
+                <p className="text-3xl font-black text-white">{FORMAT_CURRENCY(dashboardStats?.netProfit || 0)}</p>
               </div>
-
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-500 uppercase">إجمالي الإيرادات</span>
-                </div>
-                <p className="text-2xl font-black text-green-400">{FORMAT_CURRENCY(totalIncome)}</p>
+                <span className="text-xs font-black text-slate-500 uppercase">إجمالي المسحوبات</span>
+                <p className="text-2xl font-black text-red-400">{FORMAT_CURRENCY(partners.reduce((a,b)=>a+b.totalWithdrawn, 0))}</p>
               </div>
-
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-500 uppercase">مصاريف التشغيل</span>
-                </div>
-                <p className="text-2xl font-black text-red-400">{FORMAT_CURRENCY(operationalExpenses)}</p>
+                <span className="text-xs font-black text-slate-500 uppercase">الرصيد المتاح للشركاء</span>
+                <p className="text-2xl font-black text-green-400">{FORMAT_CURRENCY(partners.reduce((a,b)=>a+b.currentBalance, 0))}</p>
               </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Partners Cards Section */}
+      {/* 2. Partners Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {partners.map(partner => {
-          const totalShare = netProfit * (partner.sharePercentage / 100);
-          const remaining = Math.max(0, totalShare - partner.paidAmount);
-          const isFullyPaid = remaining <= 0 && totalShare > 0;
-
-          return (
-            <div key={partner.id} className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col border-b-8 border-b-slate-100">
-              <div className="p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${isFullyPaid ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-600'}`}>
-                    <Users size={28} />
-                  </div>
-                  <div className="bg-blue-50 px-3 py-1 text-blue-600 font-black text-xs rounded-lg">
-                    {partner.sharePercentage}% نسبة
-                  </div>
+        {partners.map(partner => (
+          <div key={partner.id} className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col border-b-8 border-b-brand-primary/10">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-brand-bg text-brand-primary flex items-center justify-center">
+                  <Users size={28} />
                 </div>
-                <h3 className="text-xl font-black text-slate-900 mb-6">{partner.name}</h3>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-bold">إجمالي نصيبه:</span>
-                    <span className="font-black text-slate-800">{FORMAT_CURRENCY(totalShare)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-bold">تم صرفه:</span>
-                    <span className="font-black text-blue-600">{FORMAT_CURRENCY(partner.paidAmount)}</span>
-                  </div>
-                  
-                  {/* المتبقي - هنا التركيز الأساسي */}
-                  <div className="bg-slate-900 p-5 rounded-2xl text-white mt-4 shadow-xl">
-                    <div className="flex justify-between items-center">
-                       <span className="text-[10px] font-black text-slate-400 uppercase">المتبقي له حالياً:</span>
-                       <span className="text-xl font-black">{FORMAT_CURRENCY(remaining)}</span>
-                    </div>
-                  </div>
+                <div className="bg-brand-accent/30 px-3 py-1 text-brand-primary font-black text-xs rounded-lg">
+                  {partner.sharePercentage}% حصة
                 </div>
               </div>
+              <h3 className="text-xl font-black text-slate-900 mb-6">{partner.name}</h3>
 
-              <div className="p-8 pt-0 mt-auto">
-                <div className="space-y-4">
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      placeholder="ادخل مبلغ لصرفه..."
-                      disabled={remaining <= 0}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-center font-black disabled:opacity-50"
-                      value={payAmounts[partner.id] || ''}
-                      onChange={(e) => handleInputChange(partner.id, e.target.value)}
-                    />
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 font-bold">إجمالي ما سحبه:</span>
+                  <span className="font-black text-red-600">{FORMAT_CURRENCY(partner.totalWithdrawn)}</span>
+                </div>
+                
+                <div className="bg-brand-primary p-5 rounded-2xl text-white mt-4 shadow-xl">
+                  <div className="flex justify-between items-center">
+                     <span className="text-[10px] font-black text-brand-accent uppercase">الرصيد المتاح حالياً:</span>
+                     <span className="text-xl font-black">{FORMAT_CURRENCY(partner.currentBalance)}</span>
                   </div>
-
-                  <button 
-                    onClick={() => handlePayPartner(partner.id)}
-                    disabled={remaining <= 0 || !payAmounts[partner.id]}
-                    className={`w-full py-4 rounded-xl font-black flex items-center justify-center gap-2 transition-all 
-                      ${remaining > 0 && payAmounts[partner.id]
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg' 
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                  >
-                    <HandCoins size={18} />
-                    <span>تأكيد صرف المبلغ</span>
-                  </button>
                 </div>
               </div>
             </div>
-          );
-        })}
+
+            <div className="p-8 pt-0 mt-auto">
+              <div className="space-y-4">
+                <input 
+                  type="number" 
+                  placeholder="مبلغ للسحب..."
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-primary text-center font-black"
+                  value={payAmounts[partner.id] || ''}
+                  onChange={(e) => handleInputChange(partner.id, e.target.value)}
+                />
+                <button 
+                  onClick={() => handleWithdraw(partner.id)}
+                  disabled={isWithdrawing === partner.id || !payAmounts[partner.id]}
+                  className="w-full py-4 bg-brand-primary text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-brand-secondary transition-all disabled:opacity-50 shadow-lg"
+                >
+                  {isWithdrawing === partner.id ? <Loader2 size={18} className="animate-spin" /> : <HandCoins size={18} />}
+                  <span>صرف مبلغ كاش</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* 3. Historical Log */}
+      {/* 3. History */}
       <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
-        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
-               <History size={24} />
-             </div>
-             <h3 className="text-xl font-black text-slate-900">سجل المدفوعات</h3>
-          </div>
+        <div className="p-8 border-b border-slate-100 flex items-center gap-3">
+           <History size={24} className="text-brand-secondary" />
+           <h3 className="text-xl font-black text-brand-primary">سجل المحافظ (آخر العمليات)</h3>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-right">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50 text-slate-400 text-xs font-black uppercase">
               <tr>
-                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase">اسم الشريك</th>
-                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase">المبلغ</th>
-                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase">التاريخ</th>
-                <th className="px-8 py-5 text-xs font-black text-slate-400 uppercase text-left">الحالة</th>
+                <th className="px-8 py-5">الشريك</th>
+                <th className="px-8 py-5">النوع</th>
+                <th className="px-8 py-5">المبلغ</th>
+                <th className="px-8 py-5">التاريخ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 font-bold">
               {distributionHistory.map((record) => (
                 <tr key={record.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-8 py-5 font-black text-slate-800">{record.partnerName}</td>
-                  <td className="px-8 py-5 font-black text-green-600">{FORMAT_CURRENCY(record.amount)}</td>
-                  <td className="px-8 py-5 text-sm text-slate-500 font-bold">{record.date}</td>
-                  <td className="px-8 py-5 text-left font-black text-[10px] text-green-600">تم الخصم من المتبقي</td>
+                  <td className="px-8 py-5 text-brand-primary">{record.partnerName}</td>
+                  <td className="px-8 py-5">
+                    <span className={`px-3 py-1 rounded-lg text-[10px] ${record.type === 'DISTRIBUTION' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {record.type === 'DISTRIBUTION' ? 'إيداع أرباح' : 'سحب كاش'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-5 font-black">{FORMAT_CURRENCY(record.amount)}</td>
+                  <td className="px-8 py-5 text-slate-400 text-sm">{record.date}</td>
                 </tr>
               ))}
             </tbody>

@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { FORMAT_CURRENCY } from '../constants';
-// Added 'Check' to the lucide-react imports
 import { Wallet, ArrowUpCircle, ArrowDownCircle, Plus, Filter, X, Eye, Receipt, Loader2, Check } from 'lucide-react';
 import { Transaction } from '../types';
 import { safesApi } from '../services/safes.api';
@@ -13,8 +12,21 @@ const Safe: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ type: 'EXPENSE', amount: '', category: '', description: '' });
 
-  const totalIncome = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+  // Extremely defensive rendering helper for React Children
+  const safeRender = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+      // Check for common nested identity properties
+      const displayVal = val.name || val.title || val.description || val._id || val.id;
+      if (typeof displayVal === 'string' || typeof displayVal === 'number') return String(displayVal);
+      return 'حركة نظام مركبة';
+    }
+    return 'بيانات غير صالحة';
+  };
+
+  const totalIncome = (transactions || []).filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalExpense = (transactions || []).filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const balance = totalIncome - totalExpense;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,10 +52,10 @@ const Safe: React.FC = () => {
 
   const handleViewReceipt = (tx: Transaction) => {
     const payload = {
-      id: tx.id,
+      id: tx.id || tx._id,
       date: tx.date,
-      customerName: tx.description,
-      productName: `حركة مالية: ${tx.category}`,
+      customerName: safeRender(tx.description),
+      productName: `حركة مالية: ${safeRender(tx.category)}`,
       totalAmount: tx.amount,
       downPayment: tx.amount,
       type: tx.type === 'INCOME' ? 'CASH' : 'EXPENSE'
@@ -74,7 +86,6 @@ const Safe: React.FC = () => {
             <p className="text-xl font-black text-red-400">{FORMAT_CURRENCY(totalExpense)}</p>
           </div>
         </div>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-secondary/10 rounded-full -mr-48 -mt-48 blur-[100px]"></div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -108,22 +119,28 @@ const Safe: React.FC = () => {
                      <p className="font-black text-sm uppercase tracking-widest">Syncing with Secure Vault...</p>
                    </td>
                 </tr>
-              ) : transactions.map(tx => (
-                <tr key={tx.id} className="hover:bg-brand-bg/30 transition-colors group">
+              ) : (transactions || []).length === 0 ? (
+                <tr>
+                   <td colSpan={5} className="p-20 text-center text-brand-secondary font-bold">لا توجد عمليات مسجلة حالياً.</td>
+                </tr>
+              ) : (transactions || []).map((tx: any) => (
+                <tr key={tx.id || tx._id} className="hover:bg-brand-bg/30 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-5">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tx.type === 'INCOME' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                         {tx.type === 'INCOME' ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
                       </div>
-                      <span className="font-black text-brand-primary text-base truncate max-w-xs">{tx.description}</span>
+                      <span className="font-black text-brand-primary text-base truncate max-w-xs">
+                        {safeRender(tx.description)}
+                      </span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
                     <span className="px-4 py-1.5 bg-brand-bg text-brand-primary rounded-xl text-[10px] font-black uppercase border border-brand-accent/20">
-                        {tx.category}
+                        {safeRender(tx.category)}
                     </span>
                   </td>
-                  <td className="px-8 py-6 text-brand-secondary font-bold text-xs text-center">{tx.date}</td>
+                  <td className="px-8 py-6 text-brand-secondary font-bold text-xs text-center">{safeRender(tx.date)}</td>
                   <td className="px-8 py-6 text-lg font-black text-left">
                     <span className={tx.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
                         {tx.type === 'INCOME' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
@@ -182,36 +199,22 @@ const Safe: React.FC = () => {
                   onChange={(e) => setFormData({...formData, amount: e.target.value})}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-black text-brand-primary pr-1">الفئة</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="إيجار، رواتب..."
-                    className="w-full px-5 py-4 bg-brand-bg border-2 border-brand-accent rounded-2xl outline-none focus:border-brand-primary text-right font-bold"
-                    value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-black text-brand-primary pr-1">الوصف</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="تفاصيل الحركة..."
-                    className="w-full px-5 py-4 bg-brand-bg border-2 border-brand-accent rounded-2xl outline-none focus:border-brand-primary text-right font-bold"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-black text-brand-primary pr-1">وصف الحركة</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="مثال: سداد فاتورة كهرباء"
+                  className="w-full px-5 py-4 bg-brand-bg border-2 border-brand-accent rounded-2xl outline-none focus:border-brand-primary text-right font-bold"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                />
               </div>
               <button 
                 type="submit"
                 disabled={isSubmitting}
                 className="w-full mt-4 px-8 py-5 bg-brand-primary hover:bg-brand-secondary text-white rounded-2xl font-black text-lg shadow-xl shadow-brand-primary/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
               >
-                {/* Fixed the 'Cannot find name Check' error by adding Check to the imports above */}
                 {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                 <span>اعتماد الحركة وتحديث الرصيد</span>
               </button>

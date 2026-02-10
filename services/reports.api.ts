@@ -1,8 +1,9 @@
 
 import api from './api';
+import { DashboardStats, SendReportResponse } from '../types';
 
 export const reportsApi = {
-  getMonthly: (month: number, year: number) => 
-    api.get('/reports/monthly', { params: { month, year } }),
-  getDashboardStats: () => api.get('/reports/dashboard'),
+  getDashboard: () => api.get<DashboardStats>('/reports/dashboard'),
+  sendEmail: (email: string, month: number, year: number) => 
+    api.post<SendReportResponse>('/reports/send-email', { email, month, year }),
 };

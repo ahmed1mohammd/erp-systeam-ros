@@ -4,7 +4,9 @@ import { Partner, ProfitDistributionRecord } from '../types';
 
 export const partnersApi = {
   getAll: () => api.get<Partner[]>('/partners'),
-  getHistory: () => api.get<ProfitDistributionRecord[]>('/profits/history'),
-  distribute: (partnerId: string, amount: number) => 
-    api.post('/profits/distribute', { partnerId, amount }),
+  distribute: (amount: number) => 
+    api.post('/partners/distribute', { amount }),
+  withdraw: (partnerId: string, amount: number) => 
+    api.post('/partners/withdraw', { partnerId, amount }),
+  getHistory: () => api.get<ProfitDistributionRecord[]>('/partners/history'),
 };

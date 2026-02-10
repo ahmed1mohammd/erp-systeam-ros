@@ -9,7 +9,8 @@ import {
   Wallet, 
   PieChart,
   FileBarChart,
-  Settings
+  Settings,
+  UserPlus
 } from 'lucide-react';
 
 export const SYSTEM_NAME = "ROS TECH";
@@ -23,6 +24,7 @@ export const NAV_ITEMS = [
   { label: 'التحصيل', path: '/payments', icon: <CreditCard size={20} />, roles: ['ADMIN', 'ACCOUNTANT', 'CASHIER'] },
   { label: 'الخزنة', path: '/safe', icon: <Wallet size={20} />, roles: ['ADMIN', 'ACCOUNTANT'] },
   { label: 'توزيع الأرباح', path: '/profit', icon: <PieChart size={20} />, roles: ['ADMIN'] },
+  { label: 'إدارة المستخدمين', path: '/users', icon: <UserPlus size={20} />, roles: ['ADMIN'] },
   { label: 'التقارير الشهرية', path: '/reports', icon: <FileBarChart size={20} />, roles: ['ADMIN', 'ACCOUNTANT'] },
   { label: 'الإعدادات', path: '/settings', icon: <Settings size={20} />, roles: ['ADMIN'] },
 ];

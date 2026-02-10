@@ -2,25 +2,29 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { UserRole } from '../types';
 import { SYSTEM_NAME, LOGO_URL } from '../constants';
-import { ShieldCheck, User as UserIcon, Lock, ChevronRight } from 'lucide-react';
+import { ShieldCheck, User as UserIcon, Lock, AlertCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
   const { login } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@rostech.com');
-  const [role, setRole] = useState<UserRole>(UserRole.ADMIN);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login delay
-    setTimeout(() => {
-      login(email, role);
+    setError('');
+    try {
+      await login(email, password);
       navigate('/');
-    }, 800);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'بيانات الدخول غير صحيحة أو الخدمة غير متوفرة');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,6 +39,13 @@ const Login: React.FC = () => {
             <p className="text-[#6A9C89] font-bold mt-2">نظام الإدارة المالية الذكي</p>
           </div>
 
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertCircle size={20} />
+              <p className="font-bold text-sm">{error}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
             <div className="space-y-2">
               <label className="block text-sm font-black text-[#16423C] pr-1 uppercase">البريد الإلكتروني</label>
@@ -47,27 +58,26 @@ const Login: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pr-12 pl-4 py-4 bg-[#E9EFEC]/50 border-2 border-[#C4DAD2]/30 rounded-[1.5rem] focus:ring-4 focus:ring-[#16423C]/10 focus:border-[#16423C] outline-none transition-all text-right font-bold"
-                  placeholder="admin@rostech.com"
+                  placeholder="name@example.com"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-black text-[#16423C] pr-1 uppercase">نوع الصلاحية</label>
+              <label className="block text-sm font-black text-[#16423C] pr-1 uppercase">كلمة المرور</label>
               <div className="relative group">
-                <select 
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
-                  className="block w-full px-5 py-4 bg-[#E9EFEC]/50 border-2 border-[#C4DAD2]/30 rounded-[1.5rem] focus:ring-4 focus:ring-[#16423C]/10 focus:border-[#16423C] outline-none transition-all text-right font-black text-[#16423C] appearance-none"
-                >
-                  <option value={UserRole.ADMIN}>مدير النظام (كامل الصلاحيات)</option>
-                  <option value={UserRole.ACCOUNTANT}>محاسب (إدارة الأرقام)</option>
-                  <option value={UserRole.CASHIER}>أمين خزنة (تحصيل وصرف)</option>
-                </select>
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-[#6A9C89]">
-                  <ChevronRight size={20} className="rotate-90" />
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#6A9C89] group-focus-within:text-[#16423C] transition-colors">
+                  <Lock size={20} />
                 </div>
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pr-12 pl-4 py-4 bg-[#E9EFEC]/50 border-2 border-[#C4DAD2]/30 rounded-[1.5rem] focus:ring-4 focus:ring-[#16423C]/10 focus:border-[#16423C] outline-none transition-all text-right font-bold"
+                  placeholder="••••••••"
+                  required
+                />
               </div>
             </div>
 

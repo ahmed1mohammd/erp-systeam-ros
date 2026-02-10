@@ -2,18 +2,35 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { FORMAT_CURRENCY } from '../constants';
-import { Search, CheckCircle2, Clock, Filter, Calendar, AlertTriangle, CheckCircle, X, Check, Eye } from 'lucide-react';
+import { Search, CheckCircle2, Clock, Filter, Calendar, AlertTriangle, CheckCircle, X, Check, Eye, Loader2 } from 'lucide-react';
+import { installmentsApi } from '../services/installments.api';
 
 const Payments: React.FC = () => {
-  const { customers, setCustomers, sales, transactions, setTransactions, installments, setInstallments, setSelectedInvoice } = useApp();
+  const { customers, sales, installments, refreshData, setSelectedInvoice } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOverdue, setFilterOverdue] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<{ amount: number, customer: string, saleId: string } | null>(null);
 
+  // Safe string extractor to prevent Error #31
+  const safeStr = (val: any): string => {
+    if (!val) return '';
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+      return val._id || val.id || val.name || 'N/A';
+    }
+    return '';
+  };
+
   const displayInstallments = useMemo(() => {
-    return installments.map(inst => {
-      const sale = sales.find(s => s.id === inst.saleId);
-      const customer = customers.find(c => c.id === sale?.customerId);
+    return (installments || []).map(inst => {
+      // Handle cases where saleId might be a populated object from the API
+      const saleIdStr = safeStr(inst.saleId);
+      const sale = (sales || []).find(s => (s.id === saleIdStr || s._id === saleIdStr));
+      
+      const custId = sale?.customerId?._id || sale?.customerId;
+      const customer = (customers || []).find(c => (c.id === custId || c._id === custId));
+      
       const today = new Date();
       const dueDate = new Date(inst.dueDate);
       
@@ -25,16 +42,21 @@ const Payments: React.FC = () => {
       return {
         ...inst,
         status,
-        customerName: customer?.name || 'عميل غير معروف',
-        customerId: sale?.customerId || '',
+        customerName: customer?.name || sale?.customerName || 'عميل غير معروف',
+        customerId: custId || '',
+        saleIdDisplay: saleIdStr,
         saleData: sale
       };
     });
   }, [installments, sales, customers]);
 
-  const filteredInstallments = displayInstallments.filter(inst => {
-    const matchesSearch = inst.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         inst.saleId.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredInstallments = (displayInstallments || []).filter(inst => {
+    const customerName = inst.customerName || '';
+    const saleId = String(inst.saleIdDisplay || '');
+    const search = searchTerm || '';
+    
+    const matchesSearch = customerName.toLowerCase().includes(search.toLowerCase()) || 
+                         saleId.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filterOverdue ? inst.status === 'OVERDUE' : true;
     return matchesSearch && matchesFilter;
   }).sort((a, b) => {
@@ -43,26 +65,17 @@ const Payments: React.FC = () => {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
-  const handlePayInstallment = (instId: string, amount: number, customerName: string, customerId: string, saleId: string) => {
-      const paymentTx = {
-        id: `TX-${Date.now()}`,
-        type: 'INCOME' as const,
-        category: 'تحصيل أقساط',
-        amount: amount,
-        date: new Date().toISOString().split('T')[0],
-        description: `تحصيل قسط من العميل ${customerName}`,
-      };
-      setTransactions([paymentTx, ...transactions]);
-
-      setInstallments(prev => prev.map(inst => 
-        inst.id === instId ? { ...inst, status: 'PAID' } : inst
-      ));
-
-      setCustomers(prev => prev.map(c => 
-        c.id === customerId ? { ...c, totalBalance: Math.max(0, c.totalBalance - amount) } : c
-      ));
-      
-      setSuccessMessage({ amount, customer: customerName, saleId });
+  const handlePayInstallment = async (instId: string, amount: number, customerName: string, saleId: string) => {
+      setIsProcessing(instId);
+      try {
+        await installmentsApi.pay(instId);
+        await refreshData();
+        setSuccessMessage({ amount, customer: customerName, saleId });
+      } catch (error: any) {
+        alert(error.response?.data?.message || "فشل في تسجيل عملية التحصيل");
+      } finally {
+        setIsProcessing(null);
+      }
   };
 
   const handleViewReceipt = (inst: any) => {
@@ -80,7 +93,6 @@ const Payments: React.FC = () => {
 
   return (
     <div className="space-y-6 relative" dir="rtl">
-      {/* Toast Success Notification */}
       {successMessage && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-500">
           <div className="bg-[#16423C] text-white px-8 py-4 rounded-[1.5rem] shadow-2xl flex items-center gap-4 border-2 border-[#6A9C89]/30 min-w-[350px]">
@@ -95,11 +107,11 @@ const Payments: React.FC = () => {
             </div>
             <button 
               onClick={() => {
-                const sale = sales.find(s => s.id === successMessage.saleId);
+                const saleIdStr = successMessage.saleId;
+                const sale = sales.find(s => (s.id === saleIdStr || s._id === saleIdStr));
                 if (sale) setSelectedInvoice(sale);
               }}
               className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-              title="عرض التفاصيل"
             >
               <Eye size={18} />
             </button>
@@ -151,10 +163,11 @@ const Payments: React.FC = () => {
                 filteredInstallments.map((inst) => {
                   const isOverdue = inst.status === 'OVERDUE';
                   const isPaid = inst.status === 'PAID';
+                  const instId = inst.id || inst._id;
 
                   return (
                     <tr 
-                      key={inst.id} 
+                      key={instId} 
                       className={`transition-all duration-300 ${isPaid ? 'bg-green-50/40 opacity-80' : isOverdue ? 'bg-red-50/70 hover:bg-red-100/70' : 'hover:bg-[#E9EFEC]/30'}`}
                     >
                       <td className="px-8 py-5">
@@ -166,14 +179,14 @@ const Payments: React.FC = () => {
                           }`}>
                             {isPaid ? <Check size={20} /> : isOverdue ? <AlertTriangle size={20} /> : <Clock size={20} />}
                           </div>
-                          <p className={`font-black transition-colors ${isPaid ? 'text-green-700' : 'text-[#16423C]'}`}>{inst.customerName}</p>
+                          <p className={`font-black transition-colors ${isPaid ? 'text-green-700' : 'text-[#16423C]'}`}>{safeStr(inst.customerName)}</p>
                         </div>
                       </td>
-                      <td className="px-8 py-5 text-[#6A9C89] font-black">{inst.saleId}</td>
+                      <td className="px-8 py-5 text-[#6A9C89] font-black">{safeStr(inst.saleIdDisplay)}</td>
                       <td className="px-8 py-5">
                         <div className={`flex items-center gap-1.5 font-bold ${isPaid ? 'text-green-600' : isOverdue ? 'text-red-600' : 'text-slate-500'}`}>
                           <Calendar size={14} />
-                          {inst.dueDate}
+                          {new Date(inst.dueDate).toLocaleDateString('ar-EG')}
                         </div>
                       </td>
                       <td className="px-8 py-5 font-black text-lg text-[#16423C]">
@@ -186,11 +199,10 @@ const Payments: React.FC = () => {
                                 <button 
                                   onClick={() => handleViewReceipt(inst)}
                                   className="p-2.5 text-brand-primary bg-white border border-brand-accent rounded-xl hover:bg-brand-primary hover:text-white transition-all shadow-inner"
-                                  title="عرض التفاصيل"
                                 >
                                   <Eye size={18} />
                                 </button>
-                                <div className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-xs font-black rounded-xl shadow-lg shadow-green-200 animate-in zoom-in duration-300">
+                                <div className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-xs font-black rounded-xl shadow-lg">
                                   <CheckCircle2 size={16} />
                                   <span>تم التحصيل</span>
                                 </div>
@@ -201,10 +213,11 @@ const Payments: React.FC = () => {
                                 <span className="px-3 py-1 bg-red-600 text-white text-[10px] font-black rounded-lg animate-pulse uppercase">متأخر</span>
                               )}
                               <button 
-                                onClick={() => handlePayInstallment(inst.id, inst.amount, inst.customerName, inst.customerId, inst.saleId)}
-                                className="px-6 py-2 bg-[#16423C] hover:bg-[#6A9C89] text-white rounded-xl font-black text-sm transition-all shadow-md active:scale-95"
+                                disabled={isProcessing === instId}
+                                onClick={() => handlePayInstallment(instId, inst.amount, inst.customerName, inst.saleIdDisplay)}
+                                className="px-6 py-2 bg-[#16423C] hover:bg-[#6A9C89] text-white rounded-xl font-black text-sm transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2"
                               >
-                                تحصيل الآن
+                                {isProcessing === instId ? <Loader2 size={16} className="animate-spin" /> : 'تحصيل الآن'}
                               </button>
                             </>
                           )}
@@ -216,10 +229,7 @@ const Payments: React.FC = () => {
               ) : (
                 <tr>
                   <td colSpan={5} className="p-20 text-center text-[#6A9C89] font-bold bg-[#E9EFEC]/10">
-                    <div className="mb-4 text-[#C4DAD2] flex justify-center">
-                      <Clock size={64} />
-                    </div>
-                    <p className="text-xl">لا يوجد أقساط حالياً.</p>
+                    <p className="text-xl">لا يوجد أقساط مطابقة للبحث.</p>
                   </td>
                 </tr>
               )}

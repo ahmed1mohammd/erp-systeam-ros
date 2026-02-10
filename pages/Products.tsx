@@ -24,9 +24,11 @@ const Products: React.FC = () => {
     stock: 0 
   });
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = (products || []).filter(p => {
+    const name = p?.name || '';
+    const search = searchTerm || '';
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
 
   const resetForm = () => {
     setFormData({ name: '', costPrice: 0, sellPrice: 0, stock: 0 });

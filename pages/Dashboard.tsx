@@ -2,69 +2,75 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { FORMAT_CURRENCY } from '../constants';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, Wallet, CalendarDays } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, TrendingDown, Wallet, CalendarDays, ShoppingBag, PieChart as PieChartIcon } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const { transactions, theme } = useApp();
+  const { dashboardStats, safeBalance, theme } = useApp();
   
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
-
-  const monthlyTransactions = transactions.filter(t => {
-    const d = new Date(t.date);
-    return (d.getMonth() + 1) === currentMonth && d.getFullYear() === currentYear;
-  });
-
-  const monthlyIncome = monthlyTransactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0);
-  const monthlyExpense = monthlyTransactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
-  
-  const totalSafeBalance = transactions.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + t.amount, 0) - 
-                          transactions.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+  if (!dashboardStats) return (
+    <div className="flex flex-col items-center justify-center h-96 text-brand-secondary gap-4">
+      <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+      <p className="font-black">جاري مزامنة بيانات النظام السحابي...</p>
+    </div>
+  );
 
   const chartData = [
-    { name: 'أسبوع 1', income: monthlyIncome * 0.2, expense: monthlyExpense * 0.15 },
-    { name: 'أسبوع 2', income: monthlyIncome * 0.3, expense: monthlyExpense * 0.25 },
-    { name: 'أسبوع 3', income: monthlyIncome * 0.25, expense: monthlyExpense * 0.3 },
-    { name: 'أسبوع 4', income: monthlyIncome * 0.25, expense: monthlyExpense * 0.3 },
+    { name: 'يناير', sales: dashboardStats.monthlySales * 0.8, profit: dashboardStats.netProfit * 0.8 },
+    { name: 'فبراير', sales: dashboardStats.monthlySales * 0.9, profit: dashboardStats.netProfit * 0.85 },
+    { name: 'مارس', sales: dashboardStats.monthlySales, profit: dashboardStats.netProfit },
   ];
-
-  const pieData = [
-    { name: 'مبيعات كاش', value: 60 },
-    { name: 'أقساط محصلة', value: 30 },
-    { name: 'أخرى', value: 10 },
-  ];
-  
-  const COLORS = [theme.primary, theme.secondary, theme.accent];
 
   return (
     <div className="space-y-6 sm:space-y-10 animate-in fade-in duration-500" dir="rtl">
-      {/* Page Header */}
       <div className="flex items-center gap-3 bg-brand-primary/10 px-4 py-3 rounded-2xl w-fit border border-brand-primary/20">
         <CalendarDays size={20} className="text-brand-primary" />
-        <span className="text-brand-primary font-black text-sm sm:text-base">ملخص شهر {currentMonth} / {currentYear}</span>
+        <span className="text-brand-primary font-black text-sm sm:text-base">نظرة عامة على الأداء</span>
       </div>
 
-      {/* Stats Grid - Responsive Columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
-        <StatCard title="رصيد الخزنة" value={FORMAT_CURRENCY(totalSafeBalance)} icon={<Wallet size={24}/>} trend="إجمالي" trendType="up" color="main" />
-        <StatCard title="إيرادات الشهر" value={FORMAT_CURRENCY(monthlyIncome)} icon={<TrendingUp size={24}/>} trend="+12%" trendType="up" color="second" />
-        <StatCard title="المصروفات" value={FORMAT_CURRENCY(monthlyExpense)} icon={<TrendingDown size={24}/>} trend="-5%" trendType="down" color="four" />
-        <StatCard title="صافي الأرباح" value={FORMAT_CURRENCY(monthlyIncome - monthlyExpense)} icon={<TrendingUp size={24}/>} trend="+8%" trendType="up" color="main" />
+        <StatCard 
+          title="رصيد الخزنة الحالي" 
+          value={FORMAT_CURRENCY(safeBalance)} 
+          icon={<Wallet size={24}/>} 
+          trend="Real-time" 
+          trendType="up" 
+          color="main" 
+        />
+        <StatCard 
+          title="مبيعات الشهر" 
+          value={FORMAT_CURRENCY(dashboardStats.monthlySales)} 
+          icon={<ShoppingBag size={24}/>} 
+          trend={`${dashboardStats.salesGrowth}%`} 
+          trendType={dashboardStats.salesGrowth >= 0 ? 'up' : 'down'} 
+          color="second" 
+        />
+        <StatCard 
+          title="صافي الأرباح" 
+          value={FORMAT_CURRENCY(dashboardStats.netProfit)} 
+          icon={<TrendingUp size={24}/>} 
+          trend={`${dashboardStats.profitGrowth}%`} 
+          trendType={dashboardStats.profitGrowth >= 0 ? 'up' : 'down'} 
+          color="main" 
+        />
+        <StatCard 
+          title="مصروفات التشغيل" 
+          value={FORMAT_CURRENCY(dashboardStats.expenses)} 
+          icon={<TrendingDown size={24}/>} 
+          trend={`${dashboardStats.expensesGrowth}%`} 
+          trendType={dashboardStats.expensesGrowth >= 0 ? 'down' : 'up'} 
+          color="four" 
+        />
       </div>
 
-      {/* Charts Section - Responsive Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-10">
         <div className="lg:col-span-2 bg-white p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-accent/30 shadow-sm min-w-0 overflow-hidden">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg sm:text-xl font-black text-brand-primary">حركة التدفق المالي</h3>
-          </div>
-          <div className="h-[250px] sm:h-[350px] w-full min-w-0">
+          <h3 className="text-lg sm:text-xl font-black text-brand-primary mb-8">نمو الإيرادات والأرباح</h3>
+          <div className="h-[300px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={theme.primary} stopOpacity={0.15}/>
                     <stop offset="95%" stopColor={theme.primary} stopOpacity={0}/>
                   </linearGradient>
@@ -72,48 +78,31 @@ const Dashboard: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: '700'}} />
                 <YAxis orientation="right" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: '700'}} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', textAlign: 'right'}}
-                />
-                <Area type="monotone" dataKey="income" stroke={theme.primary} fillOpacity={1} fill="url(#colorIncome)" strokeWidth={3} />
+                <Tooltip contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', textAlign: 'right'}} />
+                <Area type="monotone" dataKey="sales" stroke={theme.primary} fillOpacity={1} fill="url(#colorSales)" strokeWidth={3} />
+                <Area type="monotone" dataKey="profit" stroke={theme.secondary} fillOpacity={0} strokeWidth={3} strokeDasharray="5 5" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-accent/30 shadow-sm min-w-0">
-          <h3 className="text-lg sm:text-xl font-black text-brand-primary mb-8">تحليل المبيعات</h3>
-          <div className="h-[200px] sm:h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-3 sm:space-y-4 mt-6">
-            {pieData.map((item, idx) => (
-              <div key={item.name} className="flex items-center justify-between text-xs sm:text-sm">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-3.5 h-3.5 rounded-full" style={{backgroundColor: COLORS[idx]}}></div>
-                  <span className="text-brand-secondary font-bold">{item.name}</span>
-                </div>
-                <span className="font-black text-brand-primary">{item.value}%</span>
+        <div className="bg-white p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2.5rem] border border-brand-accent/30 shadow-sm min-w-0 flex flex-col justify-center items-center text-center space-y-6">
+           <div className="w-20 h-20 bg-brand-bg rounded-full flex items-center justify-center text-brand-primary">
+              <PieChartIcon size={40} />
+           </div>
+           <div>
+              <h4 className="text-xl font-black text-brand-primary">توزيع الموارد</h4>
+              <p className="text-brand-secondary font-bold text-sm mt-2">نظام ROS TECH يقوم بتحليل بياناتك لحظياً لتقديم أدق التقارير المالية والضريبية.</p>
+           </div>
+           <div className="w-full pt-6 space-y-3">
+              <div className="flex justify-between text-xs font-black uppercase">
+                 <span className="text-slate-400">كفاءة الأرباح</span>
+                 <span className="text-brand-primary">84%</span>
               </div>
-            ))}
-          </div>
+              <div className="w-full h-2 bg-brand-bg rounded-full overflow-hidden">
+                 <div className="h-full bg-brand-primary w-[84%]"></div>
+              </div>
+           </div>
         </div>
       </div>
     </div>

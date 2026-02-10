@@ -14,15 +14,18 @@ import {
   Plus,
   ArrowRight,
   FileText,
-  Search
+  Search,
+  Loader2
 } from 'lucide-react';
-import { Sale, Installment } from '../types';
+import { Sale } from '../types';
+import { salesApi } from '../services/sales.api';
 
 const Sales: React.FC = () => {
-  const { customers, setCustomers, products, setSales, sales, setTransactions, transactions, installments, setInstallments, setSelectedInvoice } = useApp();
+  const { customers, products, sales, refreshData, setSelectedInvoice } = useApp();
   
   const [view, setView] = useState<'LIST' | 'CREATE' | 'SUCCESS'>('LIST');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -31,7 +34,7 @@ const Sales: React.FC = () => {
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [lastSaleId, setLastSaleId] = useState('');
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const selectedProduct = products.find(p => p.id === selectedProductId || p._id === selectedProductId);
   
   const monthlyInstallment = useMemo(() => {
     if (!selectedProduct || paymentType === 'CASH') return 0;
@@ -39,56 +42,36 @@ const Sales: React.FC = () => {
     return remaining / installmentsCount;
   }, [selectedProduct, paymentType, downPayment, installmentsCount]);
 
-  const handleCreateSale = (e: React.FormEvent) => {
+  const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct || !selectedCustomerId) return;
 
-    const saleId = `S-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
-    const newSale: Sale = {
-      id: saleId,
-      customerId: selectedCustomerId,
-      productId: selectedProductId,
-      type: paymentType,
-      totalAmount: selectedProduct.sellPrice,
-      downPayment: paymentType === 'CASH' ? selectedProduct.sellPrice : downPayment,
-      date: new Date().toISOString().split('T')[0],
-      installmentsCount: paymentType === 'CASH' ? 0 : installmentsCount,
-    };
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        customerId: selectedCustomerId,
+        productId: selectedProductId,
+        paymentMethod: paymentType,
+        downPayment: paymentType === 'CASH' ? selectedProduct.sellPrice : downPayment,
+        installments: paymentType === 'INSTALLMENT' ? Array.from({ length: installmentsCount }).map((_, idx) => {
+          const dueDate = new Date();
+          dueDate.setMonth(dueDate.getMonth() + idx + 1);
+          return {
+            amount: monthlyInstallment,
+            dueDate: dueDate.toISOString().split('T')[0]
+          };
+        }) : []
+      };
 
-    if (paymentType === 'INSTALLMENT') {
-      const debt = selectedProduct.sellPrice - downPayment;
-      const newInstallments: Installment[] = Array.from({ length: installmentsCount }).map((_, idx) => {
-        const dueDate = new Date();
-        dueDate.setMonth(dueDate.getMonth() + idx + 1);
-        return {
-          id: `INST-${saleId}-${idx + 1}`,
-          saleId: saleId,
-          dueDate: dueDate.toISOString().split('T')[0],
-          amount: debt / installmentsCount,
-          status: 'PENDING'
-        };
-      });
-      setInstallments(prev => [...prev, ...newInstallments]);
-      
-      setCustomers(prev => prev.map(c => 
-        c.id === selectedCustomerId ? { ...c, totalBalance: c.totalBalance + debt } : c
-      ));
+      const { data } = await salesApi.create(payload);
+      setLastSaleId(data.id || data._id || 'NEW');
+      await refreshData();
+      setView('SUCCESS');
+    } catch (error: any) {
+      alert(error.response?.data?.message || "فشل في تسجيل عملية البيع على السيرفر");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSales([newSale, ...sales]);
-    setLastSaleId(saleId);
-
-    const cashEntry = {
-      id: `TX-${Date.now()}`,
-      type: 'INCOME' as const,
-      category: 'مبيعات',
-      amount: newSale.downPayment,
-      date: newSale.date,
-      description: `فاتورة بيع ${saleId} - ${selectedProduct.name}`,
-    };
-    setTransactions([cashEntry, ...transactions]);
-
-    setView('SUCCESS');
   };
 
   const reset = () => {
@@ -100,10 +83,15 @@ const Sales: React.FC = () => {
     setLastSaleId('');
   };
 
-  const filteredSales = sales.filter(s => {
-    const customer = customers.find(c => c.id === s.customerId);
-    return s.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           customer?.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredSales = (sales || []).filter(s => {
+    const custId = s.customerId?._id || s.customerId;
+    const customer = (customers || []).find(c => c.id === custId || c._id === custId);
+    const saleId = s?.id || s?._id || '';
+    const customerName = customer?.name || s.customerName || '';
+    const search = searchTerm || '';
+    
+    return saleId.toLowerCase().includes(search.toLowerCase()) || 
+           customerName.toLowerCase().includes(search.toLowerCase());
   });
 
   return (
@@ -156,33 +144,39 @@ const Sales: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-bg">
-                        {filteredSales.map(sale => (
-                            <tr key={sale.id} className="hover:bg-slate-50 transition-colors group">
-                                <td className="px-8 py-5 font-black text-brand-primary">{sale.id}</td>
-                                <td className="px-8 py-5 font-bold text-slate-700">
-                                    {customers.find(c => c.id === sale.customerId)?.name}
-                                </td>
-                                <td className="px-8 py-5 text-brand-secondary font-black text-sm">
-                                    {products.find(p => p.id === sale.productId)?.name}
-                                </td>
-                                <td className="px-8 py-5 text-slate-500 font-bold">{sale.date}</td>
-                                <td className="px-8 py-5 text-left font-black text-brand-primary">
-                                    {FORMAT_CURRENCY(sale.totalAmount)}
-                                    <span className={`mr-2 px-2 py-0.5 rounded-lg text-[10px] ${sale.type === 'CASH' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                        {sale.type === 'CASH' ? 'كاش' : 'تقسيط'}
-                                    </span>
-                                </td>
-                                <td className="px-8 py-5 text-left">
-                                    <button 
-                                        onClick={() => setSelectedInvoice(sale)}
-                                        className="p-2.5 bg-brand-bg text-brand-primary rounded-xl hover:bg-brand-primary hover:text-white transition-all shadow-inner"
-                                        title="عرض التفاصيل"
-                                    >
-                                        <Eye size={18} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        {filteredSales.map(sale => {
+                            const custId = sale.customerId?._id || sale.customerId;
+                            const prodId = sale.productId?._id || sale.productId;
+                            const customer = customers.find(c => c.id === custId || c._id === custId);
+                            const product = products.find(p => p.id === prodId || p._id === prodId);
+                            
+                            return (
+                                <tr key={sale.id || sale._id} className="hover:bg-slate-50 transition-colors group">
+                                    <td className="px-8 py-5 font-black text-brand-primary">{sale.id || sale._id}</td>
+                                    <td className="px-8 py-5 font-bold text-slate-700">
+                                        {customer?.name || sale.customerName || 'عميل مجهول'}
+                                    </td>
+                                    <td className="px-8 py-5 text-brand-secondary font-black text-sm">
+                                        {product?.name || sale.productName || 'منتج مجهول'}
+                                    </td>
+                                    <td className="px-8 py-5 text-slate-500 font-bold">{new Date(sale.date).toLocaleDateString('ar-EG')}</td>
+                                    <td className="px-8 py-5 text-left font-black text-brand-primary">
+                                        {FORMAT_CURRENCY(sale.totalAmount)}
+                                        <span className={`mr-2 px-2 py-0.5 rounded-lg text-[10px] ${sale.paymentMethod === 'CASH' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {sale.paymentMethod === 'CASH' ? 'كاش' : 'تقسيط'}
+                                        </span>
+                                    </td>
+                                    <td className="px-8 py-5 text-left">
+                                        <button 
+                                            onClick={() => setSelectedInvoice(sale)}
+                                            className="p-2.5 bg-brand-bg text-brand-primary rounded-xl hover:bg-brand-primary hover:text-white transition-all shadow-inner"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -215,7 +209,7 @@ const Sales: React.FC = () => {
                   onChange={(e) => setSelectedCustomerId(e.target.value)}
                 >
                   <option value="">-- اختر العميل من القائمة --</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
+                  {customers.map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name} ({c.phone})</option>)}
                 </select>
               </div>
 
@@ -228,7 +222,7 @@ const Sales: React.FC = () => {
                   onChange={(e) => setSelectedProductId(e.target.value)}
                 >
                   <option value="">-- اختر المنتج --</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name} - {FORMAT_CURRENCY(p.sellPrice)}</option>)}
+                  {products.map(p => <option key={p.id || p._id} value={p.id || p._id}>{p.name} - {FORMAT_CURRENCY(p.sellPrice)}</option>)}
                 </select>
               </div>
 
@@ -279,9 +273,7 @@ const Sales: React.FC = () => {
                         value={installmentsCount}
                         onChange={(e) => setInstallmentsCount(Number(e.target.value))}
                         >
-                        <option value={1}>شهر واحد</option>
-                        <option value={2}>شهران</option>
-                        <option value={3}>3 شهور</option>
+                        {[1,2,3,4,6,10,12,24].map(n => <option key={n} value={n}>{n} {n > 10 ? 'شهر' : 'شهور'}</option>)}
                         </select>
                     </div>
                   </div>
@@ -313,10 +305,10 @@ const Sales: React.FC = () => {
 
               <button 
                 type="submit"
-                disabled={!selectedProductId || !selectedCustomerId}
+                disabled={isSubmitting || !selectedProductId || !selectedCustomerId}
                 className="w-full bg-brand-primary hover:bg-brand-secondary disabled:bg-slate-200 text-white font-black py-5 rounded-[1.5rem] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3"
               >
-                <CheckCircle2 size={24} />
+                {isSubmitting ? <Loader2 className="animate-spin" size={24} /> : <CheckCircle2 size={24} />}
                 <span>إتمام عملية البيع الآن</span>
               </button>
             </div>
@@ -332,12 +324,11 @@ const Sales: React.FC = () => {
            <div>
              <h2 className="text-4xl font-black text-brand-primary mb-3">تم البيع بنجاح!</h2>
              <p className="text-xl text-brand-secondary font-bold italic">رقم الفاتورة: {lastSaleId}</p>
-             <p className="text-slate-500 mt-2 font-bold">يمكنك الآن عرض تفاصيل الفاتورة أو العودة للسجل.</p>
            </div>
            
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
               <button 
-                onClick={() => setSelectedInvoice(sales.find(s => s.id === lastSaleId))}
+                onClick={() => setSelectedInvoice(sales.find(s => (s.id === lastSaleId || s._id === lastSaleId)))}
                 className="flex items-center justify-center gap-3 px-8 py-5 bg-brand-primary text-white rounded-[1.5rem] font-black text-lg hover:bg-brand-secondary transition-all shadow-xl shadow-brand-primary/20"
               >
                 <Eye size={24} />

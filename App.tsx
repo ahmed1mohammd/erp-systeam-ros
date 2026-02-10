@@ -13,8 +13,8 @@ import ProfitDistribution from './pages/ProfitDistribution';
 import Payments from './pages/Payments';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import UsersPage from './pages/Users';
 
-// Reusable PrivateRoute component
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useApp();
   if (!user) return <Navigate to="/login" />;
@@ -34,6 +34,7 @@ const App: React.FC = () => {
           <Route path="/payments" element={<PrivateRoute><Payments /></PrivateRoute>} />
           <Route path="/safe" element={<PrivateRoute><Safe /></PrivateRoute>} />
           <Route path="/profit" element={<PrivateRoute><ProfitDistribution /></PrivateRoute>} />
+          <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
           <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" />} />

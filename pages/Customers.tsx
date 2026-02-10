@@ -13,10 +13,13 @@ const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState<Partial<Customer>>({ name: '', phone: '', address: '' });
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.phone.includes(searchTerm)
-  );
+  const filteredCustomers = (customers || []).filter(c => {
+    const name = c?.name || '';
+    const phone = c?.phone || '';
+    const search = searchTerm || '';
+    return name.toLowerCase().includes(search.toLowerCase()) || 
+           phone.includes(search);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +96,7 @@ const Customers: React.FC = () => {
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl bg-brand-primary text-white flex items-center justify-center font-black text-sm shadow-sm">
-                        {customer.name.charAt(0)}
+                        {customer.name?.charAt(0) || '?'}
                       </div>
                       <div>
                         <p className="font-black text-brand-primary leading-none mb-1">{customer.name}</p>

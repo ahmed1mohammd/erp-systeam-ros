@@ -1,18 +1,16 @@
 
 import axios from 'axios';
 
-// الرابط المفترض للـ API
-const BASE_URL = 'https://api.rostech-erp.com/v1';
+const BASE_URL = 'https://erp-rostech.vercel.app/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 3000, // تقليل المهلة الزمنية لسرعة التحويل للبيانات الوهمية
+  timeout: 10000,
 });
 
-// إضافة التوكن للطلبات
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('rostech_token');
   if (token) {
@@ -21,13 +19,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// معالجة الأخطاء
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // إذا كان الخطأ هو Network Error أو Timeout، سنقوم بتسجيله فقط في الكونسول
-    if (!error.response) {
-      console.warn('Network Error detected: Switching to Mock Data mode.');
+    if (error.response?.status === 401) {
+      localStorage.removeItem('rostech_token');
+      window.location.href = '#/login';
     }
     return Promise.reject(error);
   }

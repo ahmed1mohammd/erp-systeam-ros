@@ -1,12 +1,13 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
-  ACCOUNTANT = 'ACCOUNTANT',
-  CASHIER = 'CASHIER'
+  CASHIER = 'CASHIER',
+  ACCOUNTANT = 'ACCOUNTANT'
 }
 
 export interface User {
   id: string;
+  _id?: string;
   name: string;
   role: UserRole;
   email: string;
@@ -14,6 +15,7 @@ export interface User {
 
 export interface Customer {
   id: string;
+  _id?: string;
   name: string;
   phone: string;
   address: string;
@@ -23,6 +25,7 @@ export interface Customer {
 
 export interface Product {
   id: string;
+  _id?: string;
   name: string;
   costPrice: number;
   sellPrice: number;
@@ -31,6 +34,7 @@ export interface Product {
 
 export interface Installment {
   id: string;
+  _id?: string;
   saleId: string;
   dueDate: string;
   amount: number;
@@ -38,18 +42,26 @@ export interface Installment {
 }
 
 export interface Sale {
-  id: string;
-  customerId: string;
-  productId: string;
-  type: 'CASH' | 'INSTALLMENT';
+  id?: string;
+  _id?: string;
+  customerId: any; 
+  productId: any;  
+  paymentMethod?: 'CASH' | 'INSTALLMENT';
+  paymentType?: 'CASH' | 'INSTALLMENT';
+  type?: 'CASH' | 'INSTALLMENT';
   totalAmount: number;
-  downPayment: number;
+  downPayment?: number;
+  paidAmount?: number;
   date: string;
-  installmentsCount: number;
+  installments?: Installment[];
+  installmentsCount?: number;
+  customerName?: string;
+  productName?: string;
 }
 
 export interface Transaction {
   id: string;
+  _id?: string;
   type: 'INCOME' | 'EXPENSE' | 'WITHDRAWAL';
   category: string;
   amount: number;
@@ -59,14 +71,33 @@ export interface Transaction {
 
 export interface Partner {
   id: string;
+  _id?: string;
   name: string;
   sharePercentage: number;
-  paidAmount: number;
+  currentBalance: number;
+  totalWithdrawn: number;
 }
 
 export interface ProfitDistributionRecord {
   id: string;
+  _id?: string;
+  partnerId: string;
   partnerName: string;
   amount: number;
+  type: 'DISTRIBUTION' | 'WITHDRAWAL';
   date: string;
+}
+
+export interface DashboardStats {
+  monthlySales: number;
+  netProfit: number;
+  expenses: number;
+  safeBalance: number;
+  salesGrowth: number;
+  profitGrowth: number;
+  expensesGrowth: number;
+}
+
+export interface SendReportResponse {
+  message: string;
 }
